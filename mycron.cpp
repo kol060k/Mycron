@@ -19,6 +19,63 @@ struct time_info {			// Структура информации о времен�
         int Repeat_min;
 };
 
+time_info Calculate_Start_Time(const time_info T0) {
+// Функция подбирает задаче ближайшее подходящее время, в которое она может быть исполнена
+	time_info T;
+	T.Repeat_hour = T0.Repeat_hour;
+	T.Repeat_min = T0.Repeat_min;
+	int hh = T0.Start_Time / 3600;
+	int mm = T0.Start_Time % 3600 / 60;
+	int ss = T0.Start_Time % 60;
+	time_t seconds = time(NULL);
+	tm* timeinfo = localtime(&seconds);
+	int local_time = (int) seconds;
+	int Timezone = timeinfo->tm_hour - local_time % 86400 / 3600;	// Поправка на часовой пояс
+
+	if (T.Repeat_hour == 0)
+		hh -= Timezone;
+	if ((T.Repeat_hour == 0) && (T.Repeat_min == 0)) {
+		int t = ss + mm * 60 + hh * 3600;
+		if (t <=  local_time % 86400)
+			T.Start_Time = (time_t) (local_time - local_time % 86400 + 86400 + t);
+		else 
+			T.Start_Time = (time_t) (local_time - local_time % 86400 + t);
+	}
+
+	if ((T.Repeat_hour == 1) && (T.Repeat_min == 0)) {
+		int t = ss + mm * 60;
+		if (t <= local_time % 3600)
+			T.Start_Time = (time_t) (local_time - local_time % 3600 + 3600 + t);
+		else
+			T.Start_Time = (time_t) (local_time - local_time % 3600 + t);
+	}
+
+	if ((T.Repeat_hour == 1) && (T.Repeat_min == 1)) {
+		if (ss <= local_time % 60)
+			T.Start_Time = (time_t) (local_time - local_time % 60 + 60 + ss);
+		else
+			T.Start_Time = (time_t) (local_time - local_time % 60 + ss);
+	}
+
+	if ((T.Repeat_hour == 0) && (T.Repeat_min == 1)) {
+		if (hh > local_time % 86400 / 3600)
+			T.Start_Time = (time_t) (local_time - local_time % 86400 + hh * 3600 + ss);
+		else if (hh == local_time % 86400 / 3600) {
+			if (ss > local_time % 60)
+				T.Start_Time = (time_t) (local_time - local_time % 60 + ss);
+			else if (local_time % 3600 / 60 == 59)
+				T.Start_Time = (time_t) (local_time - local_time % 3600 + 86400 + ss);
+			else
+				T.Start_Time = (time_t) (local_time - local_time % 60 + 60 + ss);
+		}
+		else 
+			T.Start_Time = (time_t) (local_time - local_time % 86400 + 86400 
+					+ hh * 3600 + ss);
+	}
+	return T;
+}
+
+
 time_info strtotime(const string s) {	// Функция преобразования времени из строки в формат стркутуры time_info
 	time_info T;
 	string buffer;
@@ -72,51 +129,8 @@ time_info strtotime(const string s) {	// Функция преобразован
 	buffer.clear();
 
 	// Находим время, в которое задача должна выполниться первый (возможно не единственный) раз
-	time_t local_time = time(NULL);
-	tm* timeinfo = localtime(&local_time);
-	int Timezone = timeinfo->tm_hour - local_time % 86400 / 3600;	// Поправка на часовой пояс
-
-	if (T.Repeat_hour == 0)
-		hh -= Timezone;
-	if ((T.Repeat_hour == 0) && (T.Repeat_min == 0)) {
-		int t = ss + mm * 60 + hh * 3600;
-		if (t <=  local_time % 86400)
-			T.Start_Time = (time_t) (local_time - local_time % 86400 + 86400 + t);
-		else 
-			T.Start_Time = (time_t) (local_time - local_time % 86400 + t);
-	}
-
-	if ((T.Repeat_hour == 1) && (T.Repeat_min == 0)) {
-		int t = ss + mm * 60;
-		if (t <= local_time % 3600)
-			T.Start_Time = (time_t) (local_time - local_time % 3600 + 3600 + t);
-		else
-			T.Start_Time = (time_t) (local_time - local_time % 3600 + t);
-	}
-
-	if ((T.Repeat_hour == 1) && (T.Repeat_min == 1)) {
-		if (ss <= local_time % 60)
-			T.Start_Time = (time_t) (local_time - local_time % 60 + 60 + ss);
-		else
-			T.Start_Time = (time_t) (local_time - local_time % 60 + ss);
-	}
-
-	if ((T.Repeat_hour == 0) && (T.Repeat_min == 1)) {
-		if (hh > local_time % 86400 / 3600)
-			T.Start_Time = (time_t) (local_time - local_time % 86400 + hh * 3600 + ss);
-		else if (hh == local_time % 86400 / 3600) {
-			if (ss > local_time % 60)
-				T.Start_Time = (time_t) (local_time - local_time % 60 + ss);
-			else if (local_time % 3600 / 60 == 59)
-				T.Start_Time = (time_t) (local_time - local_time % 3600 + 86400 + ss);
-			else
-				T.Start_Time = (time_t) (local_time - local_time % 60 + 60 + ss);
-		}
-		else 
-			T.Start_Time = (time_t) (local_time - local_time % 86400 + 86400 
-					+ hh * 3600 + ss);
-	}
-
+	T.Start_Time = hh * 3600 + mm * 60 + ss;
+	T = Calculate_Start_Time(T);
 	return T;
 }
 
@@ -159,14 +173,18 @@ int main() {
 
 	while(!queue.empty()) {
 		time_t curtime = time(NULL);
-		Task TTT = queue.top();
-		if (curtime >= TTT.TInfo.Start_Time) {
+		Task T = queue.top();
+		if (curtime >= T.TInfo.Start_Time) {
 			pid_t pid = fork();
 			if (pid == 0) {
-				execvp(TTT.command[0], &TTT.command[0]);
+				execvp(T.command[0], &T.command[0]);
 			}
 			if (pid > 0) {
 				queue.pop();
+				if (T.TInfo.Repeat_hour || T.TInfo.Repeat_min) {
+					T.TInfo = Calculate_Start_Time(T.TInfo);
+					queue.push(T);
+				}
 				wait(0);
 			}
 			if (pid < 0)
