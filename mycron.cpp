@@ -1,11 +1,15 @@
 #include <iostream>
+#include <cstdio>
 #include <fstream>
 #include <sstream>
 #include <unistd.h>
 #include <vector>
 #include <string>
+#include <cstring>
 #include <queue>
 #include <ctime>
+#include <sys/types.h>
+#include <sys/wait.h>
 
 using namespace std;
 
@@ -71,6 +75,7 @@ time_info strtotime(const string s) {	// Функция преобразован
 	time_t local_time = time(NULL);
 	tm* timeinfo = localtime(&local_time);
 	int Timezone = timeinfo->tm_hour - local_time % 86400 / 3600;	// Поправка на часовой пояс
+
 	if (T.Repeat_hour == 0)
 		hh -= Timezone;
 	if ((T.Repeat_hour == 0) && (T.Repeat_min == 0)) {
@@ -137,7 +142,7 @@ int main() {
 		istringstream iss(str);
 		vector <char*> command;
 		while (iss >> word) {
-			command.push_back((char*)word.c_str());
+			command.push_back(strdup(word.c_str()));
 		}
 		time_info TInfo;
 		try {
@@ -150,13 +155,23 @@ int main() {
 		Task T = {TInfo, command};
 		queue.push(T);
 	}
-	Task TTT = queue.top();
-	int t = (int) TTT.TInfo.Start_Time;
-	time_t local_time = time(NULL);
-        tm* timeinfo = localtime(&local_time);
-        int Timezone = timeinfo->tm_hour - local_time % 86400 / 3600;   // Поправка на часовой пояс
-	cout << "Earlier task: ";
-	cout << t % 86400 / 3600 + Timezone << ":" << t % 3600 / 60 << ":" << t % 60 << endl;
 	Tab.close();
+
+	while(!queue.empty()) {
+		time_t curtime = time(NULL);
+		Task TTT = queue.top();
+		if (curtime >= TTT.TInfo.Start_Time) {
+			pid_t pid = fork();
+			if (pid == 0) {
+				execvp(TTT.command[0], &TTT.command[0]);
+			}
+			if (pid > 0) {
+				queue.pop();
+				wait(0);
+			}
+			if (pid < 0)
+				perror("Unable to fork");
+		}
+	}
 	return 0;
 }
