@@ -10,6 +10,7 @@
 #include <ctime>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/stat.h>
 
 using namespace std;
 
@@ -145,33 +146,50 @@ bool operator<(const Task& T1, const Task& T2) {	// Оператор сравн�
 }
 
 int main() {
+	struct stat st;
+	time_t last_change = 0;
 	priority_queue <Task, vector<Task>, less<Task>> queue;
-	ifstream Tab;
-	Tab.open("mycrontab");
-	string str;
-	string timestr;
-	string word;
-	while (Tab >> timestr) {		// Построчно считываем команды из файла
-		getline(Tab, str);		// Строку команды раздеряем в слова и кладём в vector пословно
-		istringstream iss(str);
-		vector <char*> command;
-		while (iss >> word) {
-			command.push_back(strdup(word.c_str()));
+	// Основной цикл
+	while (1) {
+		// Если с файлом mycrontab какие-то проблемы - завершаем работу
+		if (stat("mycrontab", &st)) {
+			cout << "Could not open file";
+			break;
 		}
-		time_info TInfo;
-		try {
-			TInfo = strtotime(timestr);		// Преобразуем время из файла в формат структуры time_info
+		// Создание новой очереди в случае если файл mycrontab обновлён
+		if (st.st_mtime > last_change) {
+			last_change = st.st_mtime;
+			while (!queue.empty())
+				queue.pop();
+			ifstream Tab;
+			Tab.open("mycrontab");
+			string str;
+			string timestr;
+			string word;
+			while (Tab >> timestr) {		// Построчно считываем команды из файла
+				getline(Tab, str);		// Строку команды раздеряем в слова и кладём в vector пословно
+				istringstream iss(str);
+				vector <char*> command;
+				while (iss >> word) {
+					command.push_back(strdup(word.c_str()));
+				}
+				time_info TInfo;
+				try {
+					TInfo = strtotime(timestr);	// Преобразуем время из файла в формат структуры time_info
+				}
+				catch (int err) {	// Выводим ошибку, если формат времени неверный
+					cout << "Wrong time format of task!" << endl;
+					continue;
+				}
+				Task T = {TInfo, command};
+				queue.push(T);
+			}
+			Tab.close();
 		}
-		catch (int err) {	// Выводим ошибку, если формат времени неверный
-			cout << "Wrong time format of task!" << endl;
-			continue;
-		}
-		Task T = {TInfo, command};
-		queue.push(T);
-	}
-	Tab.close();
-
-	while(!queue.empty()) {
+		// Если все задания выполнены - завершение программы
+		if (queue.empty())
+			break;
+		// Создание процессов для выполнения заданий
 		time_t curtime = time(NULL);
 		Task T = queue.top();
 		if (curtime >= T.TInfo.Start_Time) {
