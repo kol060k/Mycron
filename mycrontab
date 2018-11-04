@@ -1,0 +1,7 @@
+*:*:00 echo 00sec
+*:*:10 echo 10sec
+*:*:20 echo 20sec
+*:*:30 echo 30sec
+*:*:40 echo 40sec
+*:*:50 echo 50sec
+
