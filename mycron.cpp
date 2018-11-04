@@ -5,18 +5,124 @@
 #include <vector>
 #include <string>
 #include <queue>
+#include <ctime>
 
 using namespace std;
 
-struct Task {			// Структура задания, которое будет добавляться в приоритетную очередь как целое
-	time_t Start_Time;
+struct time_info {			// Структура информации о времени запуска задачи
+        time_t Start_Time;
+        int Repeat_hour;
+        int Repeat_min;
+};
+
+time_info strtotime(const string s) {	// Функция преобразования времени из строки в формат стркутуры time_info
+	time_info T;
+	string buffer;
+	int indent;
+	int hh = 0;
+	int mm = 0;
+	int ss = 0;
+
+	if (s[0] == '*') {	// Пробегаемся по строке, содержащей время
+		if (s[1] != ':')
+			throw 1;
+		T.Repeat_hour = 1;
+		indent = 2;
+	} 
+	else {
+		if ((s[0] < '0') || (s[0] > '2') || (s[1] < '0') || (s[1] > '9') ||
+				((s[0] == '2') && (s[1] > '3')) || (s[2] != ':'))
+			throw 1;
+		T.Repeat_hour = 0;
+		buffer += s[0];
+		buffer += s[1];
+		hh = stoi(buffer);
+		buffer.clear();
+		indent = 3;
+	}
+
+	if (s[indent] == '*') {
+		if (s[indent + 1] != ':')
+			throw 1;
+		T.Repeat_min = 1;
+		indent += 2;
+	}
+	else {
+		if ((s[indent] < '0') || (s[indent] > '5') || 
+				(s[indent + 1] < '0') || (s[indent + 1] > '9') ||
+				(s[indent + 2] != ':'))
+			throw 1;
+		T.Repeat_min = 0;
+		buffer += s[indent];
+		buffer += s[indent + 1];
+		mm = stoi(buffer);
+		buffer.clear();
+		indent += 3;
+	}
+
+	if ((s[indent] < '0') || (s[indent] > '9') || (s[indent + 1] < '0') || s[indent + 1] > '9')
+		throw 1;
+	buffer += s[indent];
+	buffer += s[indent + 1];
+	ss = stoi(buffer);
+	buffer.clear();
+
+	// Находим время, в которое задача должна выполниться первый (возможно не единственный) раз
+	time_t local_time = time(NULL);
+	tm* timeinfo = localtime(&local_time);
+	int Timezone = timeinfo->tm_hour - local_time % 86400 / 3600;	// Поправка на часовой пояс
+	if (T.Repeat_hour == 0)
+		hh -= Timezone;
+	if ((T.Repeat_hour == 0) && (T.Repeat_min == 0)) {
+		int t = ss + mm * 60 + hh * 3600;
+		if (t <=  local_time % 86400)
+			T.Start_Time = (time_t) (local_time - local_time % 86400 + 86400 + t);
+		else 
+			T.Start_Time = (time_t) (local_time - local_time % 86400 + t);
+	}
+
+	if ((T.Repeat_hour == 1) && (T.Repeat_min == 0)) {
+		int t = ss + mm * 60;
+		if (t <= local_time % 3600)
+			T.Start_Time = (time_t) (local_time - local_time % 3600 + 3600 + t);
+		else
+			T.Start_Time = (time_t) (local_time - local_time % 3600 + t);
+	}
+
+	if ((T.Repeat_hour == 1) && (T.Repeat_min == 1)) {
+		if (ss <= local_time % 60)
+			T.Start_Time = (time_t) (local_time - local_time % 60 + 60 + ss);
+		else
+			T.Start_Time = (time_t) (local_time - local_time % 60 + ss);
+	}
+
+	if ((T.Repeat_hour == 0) && (T.Repeat_min == 1)) {
+		if (hh > local_time % 86400 / 3600)
+			T.Start_Time = (time_t) (local_time - local_time % 86400 + hh * 3600 + ss);
+		else if (hh == local_time % 86400 / 3600) {
+			if (ss > local_time % 60)
+				T.Start_Time = (time_t) (local_time - local_time % 60 + ss);
+			else if (local_time % 3600 / 60 == 59)
+				T.Start_Time = (time_t) (local_time - local_time % 3600 + 86400 + ss);
+			else
+				T.Start_Time = (time_t) (local_time - local_time % 60 + 60 + ss);
+		}
+		else 
+			T.Start_Time = (time_t) (local_time - local_time % 86400 + 86400 
+					+ hh * 3600 + ss);
+	}
+
+	return T;
+}
+
+
+struct Task {				// Структура задания, которое будет добавляться в приоритетную очередь как целое
+	time_info TInfo;
 	vector<char*> command;
-	int Repeat_hour;
-	int Repeat_min;
 };
 
 bool operator<(const Task& T1, const Task& T2) {	// Оператор сравнения заданий - выяснить, какое должно выполниться раньше
-	return T1.Start_Time < T2.Start_Time;
+	return T1.TInfo.Start_Time > T2.TInfo.Start_Time;
 }
 
 int main() {
@@ -32,14 +138,25 @@ int main() {
 		vector <char*> command;
 		while (iss >> word) {
 			command.push_back((char*)word.c_str());
-			cout << word << endl;
 		}
-		time_t Start_Time = 0;		// Преобразуем считанное из файла время в time_t
-		int Repeat_hour = 0;
-		int Repeat_min = 0;
-		struct Task T = {Start_Time, command, Repeat_hour, Repeat_min};
+		time_info TInfo;
+		try {
+			TInfo = strtotime(timestr);		// Преобразуем время из файла в формат структуры time_info
+		}
+		catch (int err) {	// Выводим ошибку, если формат времени неверный
+			cout << "Wrong time format of task!" << endl;
+			continue;
+		}
+		Task T = {TInfo, command};
 		queue.push(T);
 	}
+	Task TTT = queue.top();
+	int t = (int) TTT.TInfo.Start_Time;
+	time_t local_time = time(NULL);
+        tm* timeinfo = localtime(&local_time);
+        int Timezone = timeinfo->tm_hour - local_time % 86400 / 3600;   // Поправка на часовой пояс
+	cout << "Earlier task: ";
+	cout << t % 86400 / 3600 + Timezone << ":" << t % 3600 / 60 << ":" << t % 60 << endl;
 	Tab.close();
 	return 0;
 }
