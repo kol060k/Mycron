@@ -196,6 +196,8 @@ int main() {
 			pid_t pid = fork();
 			if (pid == 0) {
 				execvp(T.command[0], &T.command[0]);
+				cout << "Wrong command!" << endl;
+				break;
 			}
 			if (pid > 0) {
 				queue.pop();
