@@ -173,6 +173,7 @@ int main() {
 				while (iss >> word) {
 					command.push_back(strdup(word.c_str()));
 				}
+				command.push_back(NULL);
 				time_info TInfo;
 				try {
 					TInfo = strtotime(timestr);	// Преобразуем время из файла в формат структуры time_info
@@ -196,7 +197,10 @@ int main() {
 			pid_t pid = fork();
 			if (pid == 0) {
 				execvp(T.command[0], &T.command[0]);
-				cout << "Wrong command!" << endl;
+				perror(T.command[0]);
+				for (auto i : T.command)
+					cout << i << " ";
+				cout << endl;
 				break;
 			}
 			if (pid > 0) {
@@ -210,6 +214,7 @@ int main() {
 			if (pid < 0)
 				perror("Unable to fork");
 		}
+		usleep(200000);
 	}
 	return 0;
 }
